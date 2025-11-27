@@ -2,6 +2,10 @@
 import numpy as np
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
+G = 1.0
+
+# Pre-allocated zero vector for performance
+_ZERO_VEC = np.zeros(3)
 
 class Tree:
     def __init__(self):
@@ -17,36 +21,69 @@ class Tree:
             Positions of particles. Shape (N, 3) where N is number of particles.
         '''
         ### Limits of root node ###
-        root_lims = [np.min(qs)*1.1, np.max(qs)*1.1]
-        self.root = Node(root_lims, root_lims, root_lims) # create root node
+        # Use separate min/max for each axis for non-cubic domains
+        mins = np.min(qs, axis=0) 
+        maxs = np.max(qs, axis=0) #* 1.1
+        # Make it cubic (required for octree)
+        size = max(maxs - mins)
+        center = (mins + maxs) / 2
+        half = size / 2 * 1.01  # Small padding
+        root_lims = (center[0] - half, center[0] + half)
+        root_ylims = (center[1] - half, center[1] + half)
+        root_zlims = (center[2] - half, center[2] + half)
+        
+        self.root = Node(root_lims, root_ylims, root_zlims)
         self.positions = qs
+        self._ZERO_VEC = np.zeros_like(self.positions)
+        self.indices = np.arange(len(qs))
         self.masses = masses
-        for i in range(len(qs)):
-            self._insertParticle(self.root, i)
-        self._calculateMass()
-        self._calculateCOM()
+        N = len(qs)
+        self.N = N
 
-    def force(self, q, threshold):
-        def _belowThreshold(node, q, threshold):
-            '''check if node is sufficiently far away from point q'''
-            dist = np.linalg.norm(node.center_of_mass - q, axis=1)
-            size = node.size
-            return size / dist < threshold
-        def _nodeForces(q, node):
-            if len(node.particle_inds) == 0:
-                return
-            threshold_mask = _belowThreshold(node, q, threshold)
-            if np.any(~threshold_mask):
-                # calculate forces for points that are below threshold
-                dist = np.linalg.norm(node.center_of_mass - q[~threshold_mask], axis=1)
-                forces[~threshold_mask] = forces[~threshold_mask] + (node.mass / dist[:,None]**2 * (node.center_of_mass - q[~threshold_mask]) / dist[:,None])
-                for child in node.children: # calculate forces for remaining points above threshold
-                    _nodeForces(q[threshold_mask], child)
-        forces = np.zeros_like(q)
-        _nodeForces(q, self.root)
+        for i, q in enumerate(qs):
+            self._insertParticle(self.root, q, i)
+
+    def force(self, threshold):
+        """
+        Compute gravitational forces on all particles using Barnes-Hut algorithm.
+        
+        For each particle, walk the tree and sum forces from all other particles/nodes.
+        Uses the opening angle criterion: if size/distance < threshold, use COM approximation.
+        """
+        n = self.N
+        forces = np.zeros((n, 3))  #np.zeros_like(self.positions)
+        positions = self.positions  # Local reference for speed
+        masses = self.masses
+        threshold2 = threshold * threshold  # Compare squared values to avoid sqrt
+
+        for i in range(self.N): # O(N)
+            stack = [self.root]
+            while stack:
+                node = stack.pop()
+                pt_set = node.particle_set
+                n_pts = len(pt_set)
+                if n_pts == 0: # skip if node is empty
+                    continue
+                elif i in pt_set: # open node if it contains this pt
+                    stack.extend(node.children)
+                # elif n_pts == 1 and node.leaf and i in pt_set: # skip if the node is a leaf and contains only the current particle
+                #     return
+                else: # check if node meets opening criteria
+                    q_i = positions[i]
+                    if type(node.center_of_mass) == type(None):
+                        self._calculateNodeCOMandMass(node) # calculate node masses on the fly. Updates Node COM attr
+                    r_vec = node.center_of_mass - q_i
+                    r2 = np.dot(r_vec,r_vec.T)#np.dot(r_vec, r_vec)
+                    if node.leaf or node.size2/r2 < threshold2: # if pt is far enough away to calcaulate the force or leaf node 
+                        forces_i = forces[i] # create reference for forces on pt i
+                        m_i = masses[i]
+                        prefactor = G * m_i * node.mass / r2**(3/2)
+                        forces_i += prefactor * r_vec
+                    else: # otherwise, open the node
+                        stack.extend(node.children)
         return forces
    
-    def _insertParticle(self, node, particle_ind):
+    def _insertParticle(self, node, q, i):
         '''
         Insert a particle into the tree node.
 
@@ -57,55 +94,53 @@ class Tree:
         particle_ind : array_like
             Index of the particle to insert.
         '''
-        if not node.inside(self.positions[particle_ind]): # check if particle is inside node. Return if it is not
+        if not node.inside(q): # check if particle is inside node. Return if it is not
             return
         else: # when the particle is inside the node
-            node.add_particle(particle_ind) # add particle to this node
-            if len(node.particle_inds) == 1: # if the node has no particles (leaf node)
+            node.add_particle(i) # add particle to this node
+            if len(node.particle_set) == 1: # if the node has no particles (leaf node)
                 return # then we are done
             else: # otherwise,
                 if len(node.children) > 0:
-                    octant = node.getOctant(self.positions[particle_ind]) # find correct octant for this particle
-                    self._insertParticle(node.children[octant], particle_ind)
+                    octant = node.getOctant(q) # find correct octant for this particle
+                    self._insertParticle(node.children[octant], q, i)
                     # .add_particle(particle_ind)
-                    
-                else: # when the current node isn't already divided
+                else: # when the current node isn't already divide
                     node.split() # split the node into children.
-                    for ind in node.particle_inds: # and redistribute the existing particles among the children
-                        octant = node.getOctant(self.positions[ind]) # find correct octant for this particle
-                        self._insertParticle(node.children[octant], ind) # This is the issue...
-
-    def _calculateCOM(self):
-        '''Calculate the COM of branch nodes recursively.'''
-        def _calculateCOMnode(node):
-            if node.leaf:
-                node.center_of_mass = self.positions[node.particle_inds]
-            else:
-                xcom = np.sum(self.positions[...,0][node.particle_inds] * self.masses[node.particle_inds]) / node.mass
-                ycom = np.sum(self.positions[...,1][node.particle_inds] * self.masses[node.particle_inds]) / node.mass
-                zcom = np.sum(self.positions[...,2][node.particle_inds] * self.masses[node.particle_inds]) / node.mass
-                node.center_of_mass = np.array([xcom, ycom, zcom])
-                for child in node.children:
-                    _calculateCOMnode(child)
-        _calculateCOMnode(self.root)
-        
-        
-    def _calculateMass(self):
-        '''Calculate the mass of branch nodes recursively.'''
-        def _calculateMassnode(node):
-            if node.leaf:
-                node.mass = self.masses[node.particle_inds]
-            else:
-                node.mass = np.sum(self.masses[node.particle_inds])
-                for child in node.children:
-                    _calculateMassnode(child)
-        _calculateMassnode(self.root)
-
-    def forces(self, q, p):
-        # Placeholder for actual force computation
-        return np.zeros_like(q)
+                    for i in node.particle_set: # and redistribute the existing particles among the children
+                        q_i = self.positions[i]
+                        octant = node.getOctant(q_i) # find correct octant for this particle
+                        self._insertParticle(node.children[octant], q_i, i)
+    def _calculateNodeCOMandMass(self, node):
+        particle_inds = None
+        if len(node.particle_set) == 0:
+            # Empty node - set COM to center of node bounds
+            node.center_of_mass = np.array([
+                (node.xmin + node.xmax) / 2,
+                (node.ymin + node.ymax) / 2,
+                (node.zmin + node.zmax) / 2
+            ])
+            if node.mass == None:
+                node.mass = 0
+        elif len(node.particle_set) == 1:
+            # Save particle mass and position if only 1 particle
+            if node.mass == None:
+                particle_inds = list(node.particle_set)
+                node.mass = self.masses[particle_inds]
+            node.center_of_mass = self.positions[particle_inds[0] if particle_inds != None else list(node.particle_set)[0]]
+        else:
+            particle_inds = list(node.particle_set)
+            qs = self.positions[particle_inds]
+            ms = self.masses[particle_inds]
+            if node.mass == None:
+                node.mass = np.sum(self.masses[particle_inds])
+            totalMass = node.mass
+            xCOM = np.sum(qs[..., 0] * ms / totalMass)#np.sum(self.positions[...,0][particle_inds] * self.masses[particle_inds]) / node.mass
+            yCOM = np.sum(qs[..., 1] * ms / totalMass)#np.sum(self.positions[...,1][particle_inds] * self.masses[particle_inds]) / node.mass
+            zCOM = np.sum(qs[..., 2] * ms / totalMass)#np.sum(self.positions[...,2][particle_inds] * self.masses[particle_inds]) / node.mass
+            node.center_of_mass = np.array([xCOM, yCOM, zCOM])
     
-    def plot(self, projection='3D', data=None):
+    def plot(self, projection='3D', data=None, style='leaf'):
         '''
         Plot the tree structure and optionally particle positions.
 
@@ -120,24 +155,31 @@ class Tree:
                 y_coords = [node.ymin, node.ymin, node.ymax, node.ymax, node.ymin]
                 plt.plot(x_coords, y_coords, 'r-', lw=1, alpha=0.5)
 
-            def plot_tree(tree, data):
+            def plot_tree(tree, data, style):
                 plt.figure(figsize=(6,6))
-                
                 nodes_to_plot = [tree.root]
                 while nodes_to_plot:
                     node = nodes_to_plot.pop()
-
-                    nodes_to_plot.extend(node.children)
-                    for child in node.children:
-                        if len(child.particle_inds) == 1:
-                            plot_node(child)
+                    if style == 'leaf':
+                        condition = (len(node.particle_set) == 1)#node.leaf
+                    # else: 
+                    #     condition = (len(node.particle_set) == 1)
+                    if condition:
+                        plot_node(node)
+                    else:
+                        nodes_to_plot.extend(node.children)
+                    # nodes_to_plot.extend(node.children)
+                    # for child in node.children:
+                    #     if len(child.particle_set) == 1:
+                    #         plot_node(child)
                 if np.all(data != None):
                     plt.scatter(data[:,0], data[:,1], s=20)
                 plt.axis('equal')
                 plt.xlabel('x')
                 plt.ylabel('y')
                 plt.show()
-            plot_tree(self, data)
+            plot_tree(self, data, style)
+
         elif projection == '3D':
             if np.all(data != None):
                 # Create traces for particles
@@ -196,17 +238,18 @@ class Tree:
             # Collect all cube edges
             all_edges_x, all_edges_y, all_edges_z = [], [], []
             nodes_to_check = [self.root]
-            nodes_to_plot = []
             while nodes_to_check:
                 node = nodes_to_check.pop()
-                nodes_to_check.extend(node.children)
-                for child in node.children:
-                    if len(child.particle_inds) == 1:
-                        nodes_to_plot.append(child)
-                        edges_x, edges_y, edges_z = get_cube_edges(child)
-                        all_edges_x.extend(edges_x)
-                        all_edges_y.extend(edges_y)
-                        all_edges_z.extend(edges_z)
+                if style=='leaf':
+                    condition = (len(node.particle_set) == 1)#node.leaf
+                if condition:
+                    edges_x, edges_y, edges_z = get_cube_edges(node)
+                    all_edges_x.extend(edges_x)
+                    all_edges_y.extend(edges_y)
+                    all_edges_z.extend(edges_z)
+                else:
+                    nodes_to_check.extend(node.children)
+                        
             # Create trace for tree structure
             tree_trace = go.Scatter3d(
                 x=all_edges_x,
@@ -241,13 +284,13 @@ class Node:
         self.leaf = True
         self.center_of_mass = None # center of mass
         self.mass = None # total mass
-        self.size = self.xmax - self.xmin # size of node (assuming cubic)
-
-        self.particle_inds = [] # particle indices
-
+        size = self.xmax - self.xmin # size of node (assuming cubic)
+        self.size2 = size**2
+        #self.particle_inds = [] # particle indices
+        self.particle_set = set()
         self.children = [] # lower-right-front, lower-right-back, lower-left-front, lower-left-back, upper-right-front, upper-right-back, upper-left-front, upper-left-back
 
-    def add_particle(self, ind):
+    def add_particle(self, i):
         '''
         Add a particle to this node.
 
@@ -258,11 +301,11 @@ class Node:
         p : array_like
             Momentum of the particle to add.
         '''
-        if len(self.particle_inds) == 0: # we are inserting the first particle now
+        if len(self.particle_set) == 0: # we are inserting the first particle now
             self.leaf = True
         else:
             self.leaf = False
-        self.particle_inds.append(ind)
+        self.particle_set.add(i)
 
     def inside(self, q):
         '''
@@ -281,6 +324,7 @@ class Node:
         return (self.xmin <= q[0] <= self.xmax and
                 self.ymin <= q[1] <= self.ymax and
                 self.zmin <= q[2] <= self.zmax)
+    
     def getOctant(self, q):
         '''
         Determine which octant the point belongs to.
@@ -321,6 +365,8 @@ class Node:
                     return 3
                 else:
                     return 7
+                
+
     def split(self):
         '''
         Split the node into 8 children.
@@ -346,42 +392,25 @@ class Node:
             Node((xmid, self.xmax), (ymid, self.ymax), (zmid, self.zmax)),
         ]
         self.leaf = False
-    # def center_of_mass(self):
-    #     '''Center of mass of the node.'''
-    #     if self.leaf:
-    #         pass
-    #     if self._center_of_mass is not None:
-    #         return self._center_of_mass
-    #     else:
-    #         self._calculateCOM()
-    #         return self._center_of_mass
+
+
+    def center_of_mass(self):
+        '''Center of mass of the node.'''
+        if len(self.particle_set) == 0:
+            self.center_of_mass = np.array([
+                (self.xmin + self.xmax) / 2,
+                (self.ymin + self.ymax) / 2,
+                (self.zmin + self.zmax) / 2])
+        if self._center_of_mass is not None:
+            return self._center_of_mass
+        else:
+            self._calculateCOM()
+            return self._center_of_mass
         
-    # def mass(self):
-    #     '''Mass of the node.'''
-    #     if self._mass is not None:
-    #         return self._mass
-    #     else:
-    #         self._calculateMass()
-    #         return self._mass
-
-    # def _calculateCOM(self):
-    #     '''Calculate the COM of nody.'''
-    #     if self.leaf:
-    #             pass
-               
-    #     else:
-    #         total_mass = np.sum(self.masses[self.particle_inds])
-    #         for child in self.children:
-    #             child.calculateCOM()
-    #             total_mass += child.mass
-    #             com_sum += child.mass * child.com
-    #         self.mass = total_mass
-    #         if total_mass > 0:
-    #             self._center_of_mass = com_sum / total_mass
-    #         else:
-    #             self._center_of_mass = np.array([0.0, 0.0, 0.0])
-
-    # def _calculateMass(self):
-    #     '''Calculate the mass of node.'''
-    #     self._mass = np.sum(self.masses[self.particle_inds])
-    
+    def mass(self, masses):
+        '''Mass of the node.'''
+        if self._mass is not None:
+            return self._mass
+        else:
+            self._calculateMass()
+            return self._mass

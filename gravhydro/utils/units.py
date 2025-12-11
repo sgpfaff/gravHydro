@@ -11,35 +11,59 @@ M_UNIT = 1e4 * u.Msun
 t_UNIT = np.sqrt(G_IN * (L_UNIT**3) / (M_UNIT * G_SI)).to(u.Myr)
 
 
-def convert_to_internal(input):
+def convert_to_internal(input, unitLength, unitTime, unitMass):
     '''convert input to internal units'''
+    if unitLength == None:
+        unitLength = L_UNIT
+    if unitMass == None:
+        unitMass = M_UNIT
+    if unitTime == None:
+        unitTime = t_UNIT
+    if (unitLength != None) or (unitTime != None): # recompute internal time
+        unitTime = np.sqrt(G_IN * (unitLength**3) / (unitMass * G_SI)).to(u.Myr)
+
     if isinstance(input, u.Quantity):
         # Convert length
         if input.unit.physical_type == 'length':
-            return (input / L_UNIT).decompose().value
+            return (input / unitLength).decompose().value
         # Convert mass
         elif input.unit.physical_type == 'mass':
-            return (input / M_UNIT).decompose().value
+            return (input / unitMass).decompose().value
         # Convert time
         elif input.unit.physical_type == 'time':
-            return (input / t_UNIT).decompose().value
+            return (input / unitTime).decompose().value
         # Convert velocity
         elif input.unit.physical_type == 'speed':
-            return (input / (L_UNIT / t_UNIT)).decompose().value
+            return (input / (unitLength / unitTime)).decompose().value
         # Convert density
         elif input.unit.physical_type == 'mass density':
-            return (input / (M_UNIT / L_UNIT**3)).decompose().value
+            return (input / (unitMass / unitLength**3)).decompose().value
+        elif input.unit.physical_type == 'surface mass density':
+            return (input / (unitMass / unitLength**2)).decompose().value
         else:
             raise ValueError(f"Unsupported unit type: {input.unit.physical_type}")
     else:
         # If no units, assume already in internal units
         return input
 
-def convert_to_physical(input, type, returnAstropy):
+def convert_to_physical(input, type, returnAstropy, unitLength, unitTime, unitMass):
+    if unitLength == None:
+        unitLength = L_UNIT
+    if unitMass == None:
+        unitMass = M_UNIT
+    if unitTime == None:
+        unitTime = t_UNIT
+    
     if type == 'length':
-        converted = (input * L_UNIT).to(u.kpc)
+        converted = (input * unitLength).to(u.kpc)
+    elif type == 'mass':
+        converted = (input * unitMass).to(u.Msun)
+    elif type == 'time':
+        converted = (input * unitTime).to(u.Myr)
     elif type == 'speed':
-        converted = (input * (L_UNIT / t_UNIT)).to(u.km / u.s)
+        converted = (input * (unitLength / unitTime)).to(u.km / u.s)
+    elif type == 'mass density':
+        converted = (input * (unitMass / unitLength**3)).to(u.g/u.cm**3)
     else:
         raise ValueError(f"Unsupported unit type: {type}")
     

@@ -285,11 +285,16 @@
             <section id="interactive-widget" class="widget-section">
                 <h3>Interactive Widget!</h3>
                 
+                The following widget allows you to see how the density estimation changes with your choice of \(h\). The white dots are the data points used to caclulate the density at the center of each pixel.
                 <p><strong><em>What would you say is the best choice for \(h\) in the example below?</em></strong></p>
                 
                 <div class="widget-container">
                     <iframe class="widget-frame" src="widgets/density_estimation.html" title="Density Estimation Widget"></iframe>
                 </div>
+
+                <div class="highlight">
+                    <p><strong>Notice:</strong> When <em>h</em> is very small, the density field captures finer details but misses the larger trend. Conversely, when <em>h</em> is very large, the approximation smooths over the structure of the true data.</p>
+                </div></div>
             </section>
         </section>
         

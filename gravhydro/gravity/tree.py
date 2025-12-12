@@ -188,7 +188,7 @@ class Tree:
                     y=data[:,1], 
                     z=data[:,2],
                     mode='markers',
-                    marker=dict(size=5, color='blue'),
+                    marker=dict(size=5, color='black'),
                     name='Particles'
                 )
             else:
@@ -197,7 +197,7 @@ class Tree:
                     y=[], 
                     z=[],
                     mode='markers',
-                    marker=dict(size=5, color='blue'),
+                    marker=dict(size=5, color='black'),
                     name='Particles'
                 )
 
@@ -256,14 +256,13 @@ class Tree:
                 y=all_edges_y,
                 z=all_edges_z,
                 mode='lines',
-                line=dict(color='red', width=2),
+                line=dict(color='teal', width=2),
                 name='Tree Structure'
             )
 
             # Create figure
             fig = go.Figure(data=[particle_trace, tree_trace])
             fig.update_layout(
-                title='3D Tree Visualization',
                 scene=dict(
                     xaxis_title='X',
                     yaxis_title='Y',

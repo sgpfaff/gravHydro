@@ -105,6 +105,23 @@
             margin-top: 1rem;
         }
         
+        .widget-tag.gravity {
+            background: rgba(255, 107, 107, 0.2);
+            color: #ff6b6b;
+        }
+        
+        .section-title {
+            font-size: 1.5rem;
+            color: #fff;
+            margin: 2rem 0 1rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .section-title:first-of-type {
+            margin-top: 0;
+        }
+        
         footer {
             text-align: center;
             padding: 2rem;
@@ -126,6 +143,7 @@
     </header>
     
     <main>
+        <h3 class="section-title">📖 Documentation</h3>
         <div class="widgets-grid">
             <div class="widget-card">
                 <a href="sph_documentation.html">
@@ -137,7 +155,10 @@
                     </div>
                 </a>
             </div>
-            
+        </div>
+        
+        <h3 class="section-title">💧 SPH Widgets</h3>
+        <div class="widgets-grid">
             <div class="widget-card">
                 <a href="widgets/density_estimation.html">
                     <div class="widget-thumbnail">🌡️</div>
@@ -148,20 +169,22 @@
                     </div>
                 </a>
             </div>
-            
-            <!-- Add more widget cards here as you create them -->
-            <!--
+        </div>
+        
+        <h3 class="section-title">🌌 Gravity Widgets</h3>
+        <div class="widgets-grid">
             <div class="widget-card">
-                <a href="widgets/your_next_widget.html">
-                    <div class="widget-thumbnail">🔮</div>
+                <a href="widgets/tree_visualization.html">
+                    <div class="widget-thumbnail" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);">🌳</div>
                     <div class="widget-info">
-                        <h2>Widget Title</h2>
-                        <p>Widget description goes here.</p>
-                        <span class="widget-tag">Category</span>
+                        <h2>Barnes-Hut Octree</h2>
+                        <p>Interactive 3D visualization of the Barnes-Hut octree data structure used for efficient N-body gravity calculations.</p>
+                        <span class="widget-tag gravity">Gravity</span>
                     </div>
                 </a>
             </div>
-            -->
+            
+            <!-- Add more gravity widget cards here -->
         </div>
     </main>
     

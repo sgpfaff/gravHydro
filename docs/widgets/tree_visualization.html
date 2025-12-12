@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Barnes-Hut Octree Visualization</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #1a1a2e;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            min-height: 100dvh;
+            padding: 5px;
+        }
+        .plot-container {
+            width: 100%;
+            max-width: 700px;
+            aspect-ratio: 1 / 1;
+            position: relative;
+        }
+        .js-plotly-plot, .plotly-graph-div {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        
+        @media (max-width: 500px), (max-height: 500px) {
+            body {
+                padding: 2px;
+            }
+            .plot-container {
+                width: 98vw;
+                height: 98vw;
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="plot-container" id="plotDiv"></div>
+    
+    <script>
+        // Generate random particle data (same seed as notebook)
+        function seededRandom(seed) {
+            var x = Math.sin(seed++) * 10000;
+            return x - Math.floor(x);
+        }
+        
+        // Use seed 41 to match notebook
+        let seed = 41;
+        const N = 30;
+        const data_x = [], data_y = [], data_z = [];
+        
+        for (let i = 0; i < N; i++) {
+            data_x.push(seededRandom(seed + i * 3) * 2 - 1);
+            data_y.push(seededRandom(seed + i * 3 + 1) * 2 - 1);
+            data_z.push(seededRandom(seed + i * 3 + 2) * 2 - 1);
+        }
+        
+        // Pre-computed tree edges (leaf nodes from the octree)
+        // These are generated from the actual tree structure
+        const treeEdges = generateOctreeEdges(data_x, data_y, data_z);
+        
+        function generateOctreeEdges(px, py, pz) {
+            // Calculate bounds
+            const xmin = Math.min(...px), xmax = Math.max(...px);
+            const ymin = Math.min(...py), ymax = Math.max(...py);
+            const zmin = Math.min(...pz), zmax = Math.max(...pz);
+            
+            const size = Math.max(xmax - xmin, ymax - ymin, zmax - zmin) * 1.01;
+            const cx = (xmin + xmax) / 2, cy = (ymin + ymax) / 2, cz = (zmin + zmax) / 2;
+            const half = size / 2;
+            
+            const bounds = {
+                xmin: cx - half, xmax: cx + half,
+                ymin: cy - half, ymax: cy + half,
+                zmin: cz - half, zmax: cz + half
+            };
+            
+            // Build octree recursively
+            const particles = px.map((x, i) => ({x, y: py[i], z: pz[i], idx: i}));
+            const edges = {x: [], y: [], z: []};
+            
+            buildOctree(bounds, particles, edges, 0);
+            
+            return edges;
+        }
+        
+        function buildOctree(bounds, particles, edges, depth) {
+            if (particles.length === 0) return;
+            
+            if (particles.length === 1 || depth > 10) {
+                // Leaf node - add cube edges
+                addCubeEdges(bounds, edges);
+                return;
+            }
+            
+            // Split into 8 children
+            const mx = (bounds.xmin + bounds.xmax) / 2;
+            const my = (bounds.ymin + bounds.ymax) / 2;
+            const mz = (bounds.zmin + bounds.zmax) / 2;
+            
+            const childBounds = [
+                {xmin: bounds.xmin, xmax: mx, ymin: bounds.ymin, ymax: my, zmin: bounds.zmin, zmax: mz},
+                {xmin: mx, xmax: bounds.xmax, ymin: bounds.ymin, ymax: my, zmin: bounds.zmin, zmax: mz},
+                {xmin: bounds.xmin, xmax: mx, ymin: my, ymax: bounds.ymax, zmin: bounds.zmin, zmax: mz},
+                {xmin: mx, xmax: bounds.xmax, ymin: my, ymax: bounds.ymax, zmin: bounds.zmin, zmax: mz},
+                {xmin: bounds.xmin, xmax: mx, ymin: bounds.ymin, ymax: my, zmin: mz, zmax: bounds.zmax},
+                {xmin: mx, xmax: bounds.xmax, ymin: bounds.ymin, ymax: my, zmin: mz, zmax: bounds.zmax},
+                {xmin: bounds.xmin, xmax: mx, ymin: my, ymax: bounds.ymax, zmin: mz, zmax: bounds.zmax},
+                {xmin: mx, xmax: bounds.xmax, ymin: my, ymax: bounds.ymax, zmin: mz, zmax: bounds.zmax}
+            ];
+            
+            for (const cb of childBounds) {
+                const childParticles = particles.filter(p => 
+                    p.x >= cb.xmin && p.x < cb.xmax &&
+                    p.y >= cb.ymin && p.y < cb.ymax &&
+                    p.z >= cb.zmin && p.z < cb.zmax
+                );
+                buildOctree(cb, childParticles, edges, depth + 1);
+            }
+        }
+        
+        function addCubeEdges(b, edges) {
+            const cubeEdges = [
+                // Bottom face
+                [[b.xmin, b.ymin, b.zmin], [b.xmax, b.ymin, b.zmin]],
+                [[b.xmax, b.ymin, b.zmin], [b.xmax, b.ymax, b.zmin]],
+                [[b.xmax, b.ymax, b.zmin], [b.xmin, b.ymax, b.zmin]],
+                [[b.xmin, b.ymax, b.zmin], [b.xmin, b.ymin, b.zmin]],
+                // Top face
+                [[b.xmin, b.ymin, b.zmax], [b.xmax, b.ymin, b.zmax]],
+                [[b.xmax, b.ymin, b.zmax], [b.xmax, b.ymax, b.zmax]],
+                [[b.xmax, b.ymax, b.zmax], [b.xmin, b.ymax, b.zmax]],
+                [[b.xmin, b.ymax, b.zmax], [b.xmin, b.ymin, b.zmax]],
+                // Vertical edges
+                [[b.xmin, b.ymin, b.zmin], [b.xmin, b.ymin, b.zmax]],
+                [[b.xmax, b.ymin, b.zmin], [b.xmax, b.ymin, b.zmax]],
+                [[b.xmax, b.ymax, b.zmin], [b.xmax, b.ymax, b.zmax]],
+                [[b.xmin, b.ymax, b.zmin], [b.xmin, b.ymax, b.zmax]]
+            ];
+            
+            for (const edge of cubeEdges) {
+                edges.x.push(edge[0][0], edge[1][0], null);
+                edges.y.push(edge[0][1], edge[1][1], null);
+                edges.z.push(edge[0][2], edge[1][2], null);
+            }
+        }
+        
+        // Create traces
+        const particleTrace = {
+            x: data_x,
+            y: data_y,
+            z: data_z,
+            mode: 'markers',
+            type: 'scatter3d',
+            marker: {
+                size: 6,
+                color: '#4a90d9',
+                opacity: 0.9
+            },
+            name: 'Particles'
+        };
+        
+        const treeTrace = {
+            x: treeEdges.x,
+            y: treeEdges.y,
+            z: treeEdges.z,
+            mode: 'lines',
+            type: 'scatter3d',
+            line: {
+                color: '#ff6b6b',
+                width: 2
+            },
+            name: 'Octree'
+        };
+        
+        const layout = {
+            title: {
+                text: 'Barnes-Hut Octree Visualization',
+                font: {color: '#eee', size: 18}
+            },
+            scene: {
+                xaxis: {title: 'X', gridcolor: '#333', zerolinecolor: '#444', color: '#aaa'},
+                yaxis: {title: 'Y', gridcolor: '#333', zerolinecolor: '#444', color: '#aaa'},
+                zaxis: {title: 'Z', gridcolor: '#333', zerolinecolor: '#444', color: '#aaa'},
+                bgcolor: '#1a1a2e'
+            },
+            paper_bgcolor: '#1a1a2e',
+            plot_bgcolor: '#1a1a2e',
+            font: {color: '#eee'},
+            margin: {l: 0, r: 0, t: 50, b: 0},
+            showlegend: true,
+            legend: {
+                x: 0.02,
+                y: 0.98,
+                bgcolor: 'rgba(0,0,0,0.5)',
+                font: {color: '#eee'}
+            }
+        };
+        
+        const config = {
+            responsive: true,
+            displayModeBar: true,
+            modeBarButtonsToRemove: ['lasso2d', 'select2d']
+        };
+        
+        Plotly.newPlot('plotDiv', [particleTrace, treeTrace], layout, config);
+    </script>
+</body>
+</html>

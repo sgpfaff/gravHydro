@@ -94,9 +94,15 @@
             font-size: 1.4em;
         }
         
-        .toc ol {
+        .toc ul {
             margin: 0;
             padding-left: 20px;
+            list-style-type: disc;
+        }
+        
+        .toc ul ul {
+            padding-left: 25px;
+            list-style-type: circle;
         }
         
         .toc li {
@@ -131,19 +137,6 @@
             border-radius: 8px;
         }
         
-        /* Aside/Note boxes */
-        .aside {
-            background-color: rgba(107, 179, 242, 0.1);
-            border-left: 4px solid var(--link-color);
-            padding: 15px 20px;
-            margin: 20px 0;
-            border-radius: 0 8px 8px 0;
-        }
-        
-        .aside strong {
-            color: var(--link-color);
-        }
-        
         /* Widget container */
         .widget-section {
             margin: 50px 0;
@@ -174,6 +167,15 @@
             color: #b0b0d0;
         }
         
+        /* Highlight box */
+        .highlight {
+            background-color: rgba(255, 107, 107, 0.1);
+            border-left: 4px solid var(--accent-color);
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
         /* Responsive */
         @media (max-width: 600px) {
             .container {
@@ -200,12 +202,17 @@
         
         <nav class="toc">
             <h2>Table of Contents</h2>
-            <ol>
+            <ul>
                 <li><a href="#introduction">Introduction</a></li>
-                <li><a href="#sph-force-equation">SPH Force Equation</a></li>
-                <li><a href="#the-kernel-function">The Kernel Function</a></li>
-                <li><a href="#interactive-density-estimation-demo">Interactive Density Estimation Demo</a></li>
-            </ol>
+                <li><a href="#hydrodynamic-force">Hydrodynamic Force</a></li>
+                <li><a href="#the-kernel-function">The Kernel Function</a>
+                    <ul>
+                        <li><a href="#interactive-widget">Interactive Widget!</a></li>
+                    </ul>
+                </li>
+                <li><a href="#calculating-gradients">Calculating Gradients</a></li>
+                <li><a href="#equation-of-state">Equation of State</a></li>
+            </ul>
         </nav>
         
         <section id="introduction">
@@ -215,73 +222,113 @@
             
             <p><strong>Smoothed Particle Hydrodynamics</strong> (SPH) is a technique to calculate hydrodynamic forces by following how individual "parcels" (like delivery boxes) evolve in the fluid. More precisely, SPH provides a technique to calculate the density, pressure, their gradients, and therefore the pressure force from a set of points "in" the fluid.</p>
             
-            <div class="aside">
-                <strong>Aside:</strong> SPH is called a <em>Lagrangian</em> approach to fluid dynamics, as opposed to a <em>Eulerian</em> approach where quantities of a fixed volume in space are evolved instead.
+            <div class="figure">
+                <img src="images/eulerian_vs_lagrangian.png" alt="Lagrangian vs Eulerian approaches to fluid dynamics." />
+                <p class="figure-caption"><strong>Figure 1.</strong> Source: Unknown :(</p>
             </div>
+            
+            <p>SPH is called a <em>Lagrangian</em> approach to fluid dynamics, as opposed to a <em>Eulerian</em> approach where quantities of a fixed volume in space are evolved instead.</p>
+        </section>
+        
+        <section id="hydrodynamic-force">
+            <h2>Hydrodynamic Force</h2>
+            
+            <p>The hydrodynamic force on particle \(i\) in SPH is given by:</p>
+            
+            <div class="equation">
+                \[\vec{F}_i = -m_i \sum_j m_j \left( \frac{P_i}{\rho_i^2} + \frac{P_j}{\rho_j^2} \right) \nabla_i W_{ij} \tag{1}\]
+            </div>
+            
+            <p>where \(P_i\) and \(P_j\) are the pressures, \(\rho_i\) and \(\rho_j\) are the densities, \(m_i\) and \(m_j\) are the masses. I will explain what \(W_{ij}\) is in the next section. The pressure is related to the density through what is known as the <em>equation of state</em>, which is chosen based on the fluid you'd like to simulate.</p>
+            
+            <div class="highlight">
+                <p>The key point here is that <strong>in order to calculate the hydrodynamic force, \(F_i\), on each particle, we need a good estimate of the local density, \(\rho_i\), at each particle.</strong></p>
+            </div>
+        </section>
+        
+        <section id="the-kernel-function">
+            <h2>The Kernel Function</h2>
             
             <p>The <em>smoothed</em> part of Smoothed Particle Hydrodynamics comes from the fact that the force is determined by calculating several characteristics of the fluid, namely the density, by smoothly interpolating over the particles.</p>
             
             <p>For example, to determine the density at a point of interest, one sums the mass of neighboring particles and divides by the local volume. However, if one were to do this with all of the particles, they would not have a calculation of the local density at that point. Thus, the sum is weighted by a function of the particle separation, known as the kernel function, \(W\). The image below illustrates this point.</p>
             
             <div class="figure">
-                <img src="sph/sphkernel.jpg" alt="The kernel function as it relates to surrounding points in SPH." />
-                <p class="figure-caption">Source: Vignjevic et al., 2021</p>
-            </div>
-        </section>
-        
-        <section id="sph-force-equation">
-            <h2>SPH Force Equation</h2>
-            
-            <p>The hydrodynamic force on particle \(i\) in SPH is given by:</p>
-            
-            <div class="equation">
-                \[\vec{F}_i = -m_i \sum_j m_j \left( \frac{P_i}{\rho_i^2} + \frac{P_j}{\rho_j^2} \right) \nabla_i W_{ij}\]
+                <img src="images/sphkernel.jpg" alt="The kernel function as it relates to surrounding points in SPH." />
+                <p class="figure-caption"><strong>Figure 2.</strong> Source: Vignjevic et al., 2021</p>
             </div>
             
-            <p>where \(P_i\) and \(P_j\) are the pressures, \(\rho_i\) and \(\rho_j\) are the densities, \(m_i\) and \(m_j\) are the masses, and \(\nabla_i W_{ij}\) is the gradient of the kernel function. <strong>Crucially, this equation requires an accurate estimate of the density \(\rho_i\) for each particle.</strong></p>
-        </section>
-        
-        <section id="the-kernel-function">
-            <h2>The Kernel Function</h2>
+            <p>Notice that beyond a particular radius, \(2h\), from the point of interest, particles contribute nothing to the local density.</p>
             
-            <p>Beyond a particular radius from the point of interest, particles contribute nothing to the local density calculation. In my implementation, I follow convention by using the following kernel function:</p>
+            <p>In my code, I follow convention by using the <em>cubic spline kernel</em> function:</p>
             
             <div class="equation">
-                \[W(r, h) = \frac{\sigma}{h^d} \begin{cases}
+                \[W(r, h) = \frac{1}{\pi h^{3}} \begin{cases}
                 1 - \frac{3}{2}q^2 + \frac{3}{4}q^3 & \text{if } 0 \leq q \leq 1 \\
                 \frac{1}{4}(2 - q)^3 & \text{if } 1 < q \leq 2 \\
                 0 & \text{if } q > 2
-                \end{cases}\]
+                \end{cases} \tag{2}\]
             </div>
             
-            <p>where \(q = r/h\) is the dimensionless distance, \(h\) is the smoothing length, \(d\) is the number of spatial dimensions, and \(\sigma\) is the normalization constant:</p>
+            <p>where \(q = r/h\) is the dimensionless distance and \(h\) is the smoothing length.</p>
+            
+            <p>With this in mind, the formula to calculate the local density for a particle is:</p>
             
             <div class="equation">
-                \[\sigma = \begin{cases}
-                \frac{2}{3} & \text{if } d = 1 \\
-                \frac{10}{7\pi} & \text{if } d = 2 \\
-                \frac{1}{\pi} & \text{if } d = 3
-                \end{cases}\]
+                \[\rho_i = \sum_j m_j W(|\vec{r}_i - \vec{r}_j|, h) \tag{3}\]
             </div>
             
-            <p>This is the <strong>cubic spline kernel</strong>, which has compact support (goes to zero) at \(q = 2\), meaning particles beyond distance \(2h\) contribute nothing to the density calculation.</p>
+            <p>where \(|\vec{r}_i - \vec{r}_j|\) is the distance between particles \(i\) and \(j\).</p>
+            
+            <p>The choice of smoothing length, \(h\), impacts the quality of the approximation. This parameter is either user defined, or in more serious codes, it is adaptive.</p>
+            
+            <section id="interactive-widget" class="widget-section">
+                <h3>Interactive Widget!</h3>
+                
+                <p><strong><em>What would you say is the best choice for \(h\) in the example below?</em></strong></p>
+                
+                <div class="widget-container">
+                    <iframe class="widget-frame" src="widgets/density_estimation.html" title="Density Estimation Widget"></iframe>
+                </div>
+            </section>
         </section>
         
-        <section id="interactive-density-estimation-demo" class="widget-section">
-            <h2>Interactive Density Estimation Demo</h2>
+        <section id="calculating-gradients">
+            <h2>Calculating Gradients</h2>
             
-            <p>The widget below demonstrates how the choice of smoothing length \(h\) affects density estimation. Use the slider to adjust \(h\) and observe how the density field changes. The white dots represent individual particles.</p>
+            <p>As your intuition may tell you, we are actually more interested in the <em>gradients</em> of these fields; the natural tendency is to move from areas of high pressure (density) to low pressure (density). Looking at the expression for the density in the last section reveals another advantage of SPH and our chosen kernel — it's easy to differentiate!</p>
             
-            <div class="widget-container">
-                <iframe class="widget-frame" src="widgets/density_estimation.html" title="Density Estimation Widget"></iframe>
+            <p>To get the gradient of density or pressure, we need the gradient of the kernel function, \(W\).</p>
+            
+            <div class="equation">
+                \[\nabla_i W_{ij} = \frac{dW}{dr}\bigg|_{r=|\vec{r}_{ij}|} \hat{\vec{r}}_{ij} \tag{4}\]
             </div>
             
-            <p>Notice that:</p>
-            <ul>
-                <li><strong>Small \(h\)</strong>: The density field becomes noisy and captures fine details, but may miss the broader structure.</li>
-                <li><strong>Large \(h\)</strong>: The density field becomes smooth but may over-smooth and lose important local variations.</li>
-            </ul>
-            <p>Finding the right balance for \(h\) is crucial for accurate SPH simulations.</p>
+            <p>which basically says that you take the derivative of \(W\) with respect to \(r\), which is spherically symmetric. Then you multiply it by the unit vector along the direction separating particles \(i\) and \(j\) to give the direction of the gradient.</p>
+            
+            <p>Finding the derivative \(dW/dr\) is as simple as differentiating Equation (2) with respect to \(r\):</p>
+            
+            <div class="equation">
+                \[\frac{dW}{dr} = \frac{\sigma}{h^{d+1}} \begin{cases}
+                -3q + \frac{9}{4}q^2 & \text{if } 0 \leq q \leq 1 \\
+                -\frac{3}{4}(2 - q)^2 & \text{if } 1 < q \leq 2 \\
+                0 & \text{if } q > 2
+                \end{cases} \tag{5}\]
+            </div>
+        </section>
+        
+        <section id="equation-of-state">
+            <h2>Equation of State</h2>
+            
+            <p>To this point we have addressed how to calculate the local density, the kernel function, and gradients. Looking back at Equation (1), all we are missing now is how to calculate the pressure.</p>
+            
+            <p>In my code, I only consider <strong>barotropic fluids</strong>, meaning that pressure is a function of density only. The form of the function relating pressure to density varies depending on the fluid you wish to simulate. I implement a simplified form of the Tait equation:</p>
+            
+            <div class="equation">
+                \[P_i = \frac{\rho_i c_s^2}{\gamma} \tag{6}\]
+            </div>
+            
+            <p>where \(c_s\) is the sound speed and \(\gamma\) is the stiffness parameter. The stiffness parameter is \(5/3\) for adiabatic gas and \(7\) for water.</p>
         </section>
         
         <footer style="text-align: center; margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border-color); color: #888;">

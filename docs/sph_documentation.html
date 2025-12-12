@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smoothed Particle Hydrodynamics - Documentation</title>
+    
+    <!-- MathJax for LaTeX rendering -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --text-color: #e0e0e0;
+            --heading-color: #ffffff;
+            --link-color: #6db3f2;
+            --border-color: #3a3a5e;
+            --code-bg: #2a2a4e;
+            --accent-color: #ff6b6b;
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.7;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        h1 {
+            color: var(--heading-color);
+            font-size: 2.5em;
+            border-bottom: 3px solid var(--accent-color);
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+        }
+        
+        h2 {
+            color: var(--heading-color);
+            font-size: 1.8em;
+            margin-top: 50px;
+            margin-bottom: 20px;
+            border-left: 4px solid var(--accent-color);
+            padding-left: 15px;
+        }
+        
+        h3 {
+            color: var(--heading-color);
+            font-size: 1.3em;
+            margin-top: 30px;
+        }
+        
+        p {
+            margin-bottom: 1.2em;
+        }
+        
+        a {
+            color: var(--link-color);
+            text-decoration: none;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+        
+        /* Table of Contents */
+        .toc {
+            background-color: var(--code-bg);
+            border-radius: 10px;
+            padding: 20px 30px;
+            margin-bottom: 40px;
+        }
+        
+        .toc h2 {
+            margin-top: 0;
+            border-left: none;
+            padding-left: 0;
+            font-size: 1.4em;
+        }
+        
+        .toc ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .toc li {
+            margin: 10px 0;
+        }
+        
+        /* Images */
+        .figure {
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .figure img {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .figure-caption {
+            font-size: 0.9em;
+            color: #aaa;
+            margin-top: 10px;
+            font-style: italic;
+        }
+        
+        /* Math equations */
+        .equation {
+            overflow-x: auto;
+            margin: 25px 0;
+            padding: 20px;
+            background-color: var(--code-bg);
+            border-radius: 8px;
+        }
+        
+        /* Aside/Note boxes */
+        .aside {
+            background-color: rgba(107, 179, 242, 0.1);
+            border-left: 4px solid var(--link-color);
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .aside strong {
+            color: var(--link-color);
+        }
+        
+        /* Widget container */
+        .widget-section {
+            margin: 50px 0;
+        }
+        
+        .widget-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 30px 0;
+        }
+        
+        .widget-frame {
+            width: 100%;
+            max-width: 720px;
+            aspect-ratio: 1 / 1;
+            border: none;
+            border-radius: 10px;
+            background-color: var(--bg-color);
+        }
+        
+        /* Emphasis */
+        strong {
+            color: var(--heading-color);
+        }
+        
+        em {
+            color: #b0b0d0;
+        }
+        
+        /* Responsive */
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px 15px;
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+            
+            h2 {
+                font-size: 1.4em;
+            }
+            
+            .equation {
+                padding: 15px 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Smoothed Particle Hydrodynamics</h1>
+        
+        <nav class="toc">
+            <h2>Table of Contents</h2>
+            <ol>
+                <li><a href="#introduction">Introduction</a></li>
+                <li><a href="#sph-force-equation">SPH Force Equation</a></li>
+                <li><a href="#the-kernel-function">The Kernel Function</a></li>
+                <li><a href="#interactive-density-estimation-demo">Interactive Density Estimation Demo</a></li>
+            </ol>
+        </nav>
+        
+        <section id="introduction">
+            <h2>Introduction</h2>
+            
+            <p>Our goal is to determine the <strong>hydrodynamic forces</strong> that dictate how our astrophysical "fluid" evolves. This is the key that will allow us to simulate its evolution.</p>
+            
+            <p><strong>Smoothed Particle Hydrodynamics</strong> (SPH) is a technique to calculate hydrodynamic forces by following how individual "parcels" (like delivery boxes) evolve in the fluid. More precisely, SPH provides a technique to calculate the density, pressure, their gradients, and therefore the pressure force from a set of points "in" the fluid.</p>
+            
+            <div class="aside">
+                <strong>Aside:</strong> SPH is called a <em>Lagrangian</em> approach to fluid dynamics, as opposed to a <em>Eulerian</em> approach where quantities of a fixed volume in space are evolved instead.
+            </div>
+            
+            <p>The <em>smoothed</em> part of Smoothed Particle Hydrodynamics comes from the fact that the force is determined by calculating several characteristics of the fluid, namely the density, by smoothly interpolating over the particles.</p>
+            
+            <p>For example, to determine the density at a point of interest, one sums the mass of neighboring particles and divides by the local volume. However, if one were to do this with all of the particles, they would not have a calculation of the local density at that point. Thus, the sum is weighted by a function of the particle separation, known as the kernel function, \(W\). The image below illustrates this point.</p>
+            
+            <div class="figure">
+                <img src="sph/sphkernel.jpg" alt="The kernel function as it relates to surrounding points in SPH." />
+                <p class="figure-caption">Source: Vignjevic et al., 2021</p>
+            </div>
+        </section>
+        
+        <section id="sph-force-equation">
+            <h2>SPH Force Equation</h2>
+            
+            <p>The hydrodynamic force on particle \(i\) in SPH is given by:</p>
+            
+            <div class="equation">
+                \[\vec{F}_i = -m_i \sum_j m_j \left( \frac{P_i}{\rho_i^2} + \frac{P_j}{\rho_j^2} \right) \nabla_i W_{ij}\]
+            </div>
+            
+            <p>where \(P_i\) and \(P_j\) are the pressures, \(\rho_i\) and \(\rho_j\) are the densities, \(m_i\) and \(m_j\) are the masses, and \(\nabla_i W_{ij}\) is the gradient of the kernel function. <strong>Crucially, this equation requires an accurate estimate of the density \(\rho_i\) for each particle.</strong></p>
+        </section>
+        
+        <section id="the-kernel-function">
+            <h2>The Kernel Function</h2>
+            
+            <p>Beyond a particular radius from the point of interest, particles contribute nothing to the local density calculation. In my implementation, I follow convention by using the following kernel function:</p>
+            
+            <div class="equation">
+                \[W(r, h) = \frac{\sigma}{h^d} \begin{cases}
+                1 - \frac{3}{2}q^2 + \frac{3}{4}q^3 & \text{if } 0 \leq q \leq 1 \\
+                \frac{1}{4}(2 - q)^3 & \text{if } 1 < q \leq 2 \\
+                0 & \text{if } q > 2
+                \end{cases}\]
+            </div>
+            
+            <p>where \(q = r/h\) is the dimensionless distance, \(h\) is the smoothing length, \(d\) is the number of spatial dimensions, and \(\sigma\) is the normalization constant:</p>
+            
+            <div class="equation">
+                \[\sigma = \begin{cases}
+                \frac{2}{3} & \text{if } d = 1 \\
+                \frac{10}{7\pi} & \text{if } d = 2 \\
+                \frac{1}{\pi} & \text{if } d = 3
+                \end{cases}\]
+            </div>
+            
+            <p>This is the <strong>cubic spline kernel</strong>, which has compact support (goes to zero) at \(q = 2\), meaning particles beyond distance \(2h\) contribute nothing to the density calculation.</p>
+        </section>
+        
+        <section id="interactive-density-estimation-demo" class="widget-section">
+            <h2>Interactive Density Estimation Demo</h2>
+            
+            <p>The widget below demonstrates how the choice of smoothing length \(h\) affects density estimation. Use the slider to adjust \(h\) and observe how the density field changes. The white dots represent individual particles.</p>
+            
+            <div class="widget-container">
+                <iframe class="widget-frame" src="widgets/density_estimation.html" title="Density Estimation Widget"></iframe>
+            </div>
+            
+            <p>Notice that:</p>
+            <ul>
+                <li><strong>Small \(h\)</strong>: The density field becomes noisy and captures fine details, but may miss the broader structure.</li>
+                <li><strong>Large \(h\)</strong>: The density field becomes smooth but may over-smooth and lose important local variations.</li>
+            </ul>
+            <p>Finding the right balance for \(h\) is crucial for accurate SPH simulations.</p>
+        </section>
+        
+        <footer style="text-align: center; margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border-color); color: #888;">
+            <p>gravHydro Documentation</p>
+        </footer>
+    </div>
+</body>
+</html>
